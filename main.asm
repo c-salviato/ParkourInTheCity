@@ -10,7 +10,7 @@ section .data
     draw_fmt    db 27, "[%d;%dH%c", 0      
     map_fmt     db 27, "[1;1H%s", 0
     
-    ; Largura exata do seu novo mapa: 75 caracteres + 13 (CR) + 10 (LF) = 77
+    ; Largura mapa: 75 caracteres + 13 (CR) + 10 (LF) = 77
     map_width   equ 77
     
     ; --- LEVEL 1 ---
@@ -27,11 +27,27 @@ section .data
                 db "######      ########      ######      #######       ##########      #######", 13, 10
                 db "######      ########      ######      #######       ##########      #######", 0
 
-    msg_death   db 27, "[2J", 27, "[H", "VOCE CAIU NO BURACO! GAME OVER.", 10, 0
+    ; --- LEVEL 3 ---
+    map_data_3  db "##########   ###########   #######   ############   ##########   ##########", 13, 10
+                db "##########   ###########   #######   ############   ##########   ##########", 13, 10
+                db "##########   ###########   #######   ############   ##########   ##########", 13, 10
+                db "                                                                           ", 13, 10
+                db "######                                                                     ", 13, 10
+                db "######      ########      ######      #######       ##########      #######", 13, 10
+                db "######      ########      ######      #######       ##########      #######", 0
+
+    item_spawn_x dq 2, 15, 29, 40, 2, 14, 28, 40
+    item_spawn_y dq 1, 1, 2, 2, 6, 6, 7, 7
+
+    msg_death   db 27, "[2J", 27, "[H", "HAHAHA VOCE CAIU NO BURACO! GAME OVER.", 10, 0
     msg_win     db 27, "[2J", 27, "[H", "PARABENS! VOCE ZEROU O JOGO!", 10, 0
     
     ; Ponteiro que guarda qual mapa está sendo jogado agora (começa no Level 1)
     current_map dq map_data_1
+
+    special_item_x          dq 0
+    special_item_y          dq 0
+    special_item_collected  dq 0
     
     player_x    dq 2
     player_y    dq 2
@@ -113,10 +129,36 @@ game_loop:
     
     ; Se chegou no limite direito (X=75), processa a transição de fase
     cmp qword [player_x], 75
-    jge .next_level
+    jl .check_y_bounds
+
+    lea rax, [map_data_3]
+    mov rbx, [current_map]
+    cmp rax, rbx
+    jne .next_level
+
+    cmp qword [special_item_collected], 0
+    je .block_level3_exit
+
+    jmp .next_level
+
+.block_level3_exit:
+    mov qword [player_x], 74
+    jmp .check_y_bounds
     
+.check_y_bounds:
     cmp qword [player_y], 1
     jl .game_over
+
+    lea rax, [map_data_3]
+    mov rbx, [current_map]
+    cmp rax, rbx
+    jne .limit_y_5
+
+    cmp qword [player_y], 7
+    jg .game_over
+    jmp .check_matrix
+
+.limit_y_5:
     cmp qword [player_y], 5
     jg .game_over
 
@@ -135,10 +177,44 @@ game_loop:
     mov cl, byte [rbx + rax]
     
     cmp cl, ' '
-    jne .render             
+    jne .check_item         
     
     cmp qword [jump_timer], 0
     jne .render             
+
+.check_item:
+    lea rdx, [map_data_3]
+    mov rbx, [current_map]
+    cmp rdx, rbx
+    jne .render
+
+    cmp qword [special_item_collected], 1
+    je .render
+
+    mov rax, [player_x]
+    cmp rax, [special_item_x]
+    jne .render
+
+    mov rax, [player_y]
+    cmp rax, [special_item_y]
+    jne .render
+
+    ; --- ITEM COLETADO ---
+    mov qword [special_item_collected], 1
+
+    ; Apaga o item do mapa (troca por '#')
+    mov rax, [special_item_y]
+    dec rax
+    mov rbx, 77
+    imul rax, rbx
+
+    mov rcx, [special_item_x]
+    dec rcx
+    add rax, rcx
+    mov byte [rdx + rax], '#'
+    
+    ; Redireciona o fluxo para pular a tela de Game Over!
+    jmp .render
 
 .game_over:
     lea rcx, [msg_death]
@@ -150,7 +226,7 @@ game_loop:
     lea rax, [map_data_1]
     mov rbx, [current_map]
     cmp rax, rbx
-    jne .win_game           ; Se não é o mapa 1, significa que estava no 2. O jogador venceu!
+    jne .check_level_2
 
     ; Se era o mapa 1, carrega o mapa 2
     lea rax, [map_data_2]
@@ -160,6 +236,50 @@ game_loop:
     mov qword [player_x], 2
     mov qword [player_y], 2
     jmp game_loop
+
+.check_level_2:
+    lea rax, [map_data_2]
+    cmp rax, rbx
+    jne .check_level_3
+
+    lea r11, [map_data_3]
+    mov qword [current_map], r11
+
+    rdtsc
+    and eax, 7
+
+    lea r8, [item_spawn_x]
+    lea r9, [item_spawn_y]
+
+    mov rcx, [r8 + rax*8]
+    mov rdx, [r9 + rax*8]
+    mov qword [special_item_x], rcx
+    mov qword [special_item_y], rdx
+    mov qword [special_item_collected], 0
+
+    mov r8, rdx
+    dec r8
+    mov r9, 77
+    imul r8, r9
+
+    mov r10, rcx
+    dec r10
+    add r8, r10
+    mov byte [r11 + r8], '!'
+
+    mov qword [player_x], 2
+    mov qword [player_y], 2
+    jmp game_loop
+
+.check_level_3:
+    lea rax, [map_data_3]
+    cmp rax, rbx
+    jne .win_game
+
+    cmp qword [special_item_collected], 0
+    je .block_level3_exit
+
+    jmp .win_game
 
 .win_game:
     lea rcx, [msg_win]
