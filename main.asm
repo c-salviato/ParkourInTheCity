@@ -4,6 +4,7 @@ default rel
 extern printf
 extern Sleep
 extern GetAsyncKeyState
+extern GetTickCount64
 
 section .data
     clear_str   db 27, "[2J", 27, "[H", 0  
@@ -79,18 +80,18 @@ section .data
     level4_items_total dq 3
     level4_items_collected dq 0
 
-    map_data_5  db "##########", "          ", "##########", "          ", "###       ", "##########", "          ", "##########", "          ", "##########", 13, 10
-                db "##########", "          ", "##########", "          ", "###       ", "##########", "          ", "##########", "          ", "##########", 13, 10
-                db "          ", "##########", "          ", "#######   ", "          ", "##########", "          ", "#######   ", "          ", "##########", 13, 10
-                db "          ", "##########", "          ", "#######   ", "          ", "##########", "          ", "#######   ", "          ", "##########", 13, 10
-                db "##########", "#######   ", "          ", "          ", "##########", "          ", "##########", "          ", "######    ", "          ", 13, 10
-                db "##########", "#######   ", "          ", "          ", "##########", "          ", "##########", "          ", "######    ", "          ", 13, 10
-                db "          ", "###       ", "          ", "##########", "          ", "##########", "          ", "##########", "          ", "##########", 13, 10
-                db "          ", "###       ", "          ", "##########", "          ", "##########", "          ", "##########", "          ", "##########", 13, 10
-                db "##########", "          ", "##########", "          ", "######    ", "          ", "#######   ", "          ", "##########", "##########", 13, 10
-                db "##########", "          ", "##########", "          ", "######    ", "          ", "#######   ", "          ", "##########", "##########", 13, 10
-                db "##########", "          ", "###       ", "          ", "##########", "          ", "##########", "          ", "###       ", "          ", 13, 10
-                db "##########", "          ", "###       ", "          ", "##########", "          ", "##########", "          ", "###       ", "          ", 0
+    map_data_5  db "##########", "          ", "######    ", "   ###    ", "##########", "          ", "#######   ", "          ", "#####     ", "          ", 13, 10
+                db "##########", "          ", "######    ", "   ###    ", "##########", "          ", "#######   ", "          ", "#####     ", "          ", 13, 10
+                db "     #####", "##########", "          ", "#####     ", "          ", "##########", "   ####   ", "##########", "          ", "######    ", 13, 10
+                db "##########", "   ####   ", "##########", "          ", "######    ", "          ", "##########", "    ####  ", "##########", "          ", 13, 10
+                db "######    ", "          ", "##########", "  #####   ", "          ", "##########", "          ", "#######   ", "          ", "##########", 13, 10
+                db "######    ", "          ", "##########", "  #####   ", "##########", "          ", "#######   ", "          ", "#####     ", "          ", 13, 10
+                db "          ", "##########", "          ", "#####     ", "##########", "          ", "#######   ", "   ###    ", "##########", "          ", 13, 10
+                db "          ", "##########", "          ", "#####     ", "##########", "          ", "#######   ", "   ###    ", "##########", "          ", 13, 10
+                db "##########", "          ", "#####     ", "          ", "##########", "          ", "#######   ", "          ", "##########", "          ", 13, 10
+                db "##########", "          ", "#####     ", "          ", "##########", "          ", "#######   ", "          ", "##########", "          ", 13, 10
+                db "###       ", "##########", "          ", "#######   ", "          ", "##########", "          ", "######    ", "##########", "          ", 13, 10
+                db "###       ", "##########", "          ", "#######   ", "          ", "##########", "          ", "######    ", "##########", "          ", 0
 
     level5_item_x dq 6, 28, 49, 70, 90
     level5_item_y dq 2, 4, 6, 9, 11
@@ -98,6 +99,7 @@ section .data
     level5_items_collected dq 0
 
     force_next_level dq 0
+    game_start_tick  dq 0
 
     msg_menu    db "####################################################", 10
                 db "#                                                  #", 10
@@ -122,13 +124,12 @@ section .data
     msg_win     db 27, "[2J", 27, "[H"
                 db "####################################################", 10
                 db "#                                                  #", 10
-                db "#                 __    __   ____                  #", 10
-                db "#                |  \\  /  | / __ \\                 #", 10
-                db "#                | | \\/ | || |  | |                #", 10
-                db "#                | |    | || |  | |                #", 10
-                db "#                |_|    |_| \\____/                 #", 10
+                db "#         VOCE ZEROU PARKOUR IN THE CITY           #", 10
                 db "#                                                  #", 10
-                db "#             VOCE VENCEU O PARKOUR                #", 10
+                db "#   []   []    [][]   []     [][]   []   []        #", 10
+                db "#  [##] [##]  [####] [##]   [####] [##] [##]       #", 10
+                db "#   ||    ||    |||    ||     |||    ||    ||      #", 10
+                db "#        Tempo total: %02llu:%02llu.%03llu        #", 10
                 db "#         Q: sair   R: recomecar do inicio         #", 10
                 db "####################################################", 10, 0
     
@@ -193,145 +194,66 @@ reset_game:
 
     mov qword [special_item_x], 0
     mov qword [special_item_y], 0
+
+    call GetTickCount64
+    mov qword [game_start_tick], rax
     ret
 
 reset_level5_state:
-    call copy_level5_template
+    mov qword [level5_items_collected], 0
 
-    lea rax, [level5_building_y]
-    mov qword [rax], 4
-    mov qword [rax + 8], 6
-    mov qword [rax + 16], 5
-    mov qword [rax + 24], 6
-    mov qword [rax + 32], 4
-    mov qword [rax + 40], 6
-    mov qword [rax + 48], 5
-    mov qword [rax + 56], 6
-    mov qword [rax + 64], 4
-    mov qword [rax + 72], 6
-
-    mov qword [level5_motion_tick], 0
-
-    lea rdx, [level5_building_dir]
-    mov qword [rdx], 1
-    mov qword [rdx + 8], -1
-    mov qword [rdx + 16], 1
-    mov qword [rdx + 24], -1
-    mov qword [rdx + 32], 1
-    mov qword [rdx + 40], -1
-    mov qword [rdx + 48], 1
-    mov qword [rdx + 56], -1
-    mov qword [rdx + 64], 1
-    mov qword [rdx + 72], -1
-    ret
-
-copy_level5_template:
-    lea rsi, [map_data_5_template]
-    lea rdi, [map_data_5]
-    mov ecx, 1225
-    rep movsb
-    ret
-
-update_level5_map:
-    push r12
-    push r13
-    push r14
-
-    lea r12, [level5_building_x]
-    lea r13, [level5_building_y]
-    lea r14, [level5_building_dir]
-
-    inc qword [level5_motion_tick]
-    mov rax, [level5_motion_tick]
-    cmp rax, 14
-    jl .clear_map
-
-    mov qword [level5_motion_tick], 0
-
-    xor esi, esi
-
-.update_building_positions:
-    cmp esi, 10
-    jge .clear_map
-
-    mov rax, [r14 + rsi*8]
-    mov rdx, [r13 + rsi*8]
-    add rdx, rax
-
-    cmp rdx, 4
-    jl .bounce_low
-    cmp rdx, 6
-    jg .bounce_high
-
-.store_position:
-    mov [r13 + rsi*8], rdx
-    inc esi
-    jmp .update_building_positions
-
-.bounce_low:
-    mov rdx, 4
-    neg rax
-    mov [r14 + rsi*8], rax
-    jmp .store_position
-
-.bounce_high:
-    mov rdx, 6
-    neg rax
-    mov [r14 + rsi*8], rax
-    jmp .store_position
-
-.clear_map:
-    call copy_level5_template
-
-    lea rdx, [map_data_5]
-    xor esi, esi
-
-.draw_buildings:
-    cmp esi, 10
-    jge .done
-
-    mov r8, [r12 + rsi*8]
-    mov r9, [r13 + rsi*8]
-
-    xor r10d, r10d
-
-.draw_rows:
-    cmp r10d, 3
-    jge .next_building
+    lea r8, [level5_item_x]
+    lea r9, [level5_item_y]
+    lea r10, [map_data_5]
 
     xor r11d, r11d
 
-.draw_cols:
-    cmp r11d, 7
-    jge .next_row
+.place_level5_items:
+    cmp r11d, 5
+    jge .done_place_level5_items
 
-    mov rax, r9
-    add rax, r10
+    mov rax, [r9 + r11*8]
     dec rax
-    mov ecx, map_width
-    imul rax, rcx
+    mov rbx, map_width
+    imul rax, rbx
 
-    mov rcx, r8
-    add rcx, r11
-    dec rcx
-    add rax, rcx
+    mov rdx, [r8 + r11*8]
+    dec rdx
+    add rax, rdx
+    mov byte [r10 + rax], '!'
 
-    mov byte [rdx + rax], '#'
     inc r11d
-    jmp .draw_cols
+    jmp .place_level5_items
 
-.next_row:
-    inc r10d
-    jmp .draw_rows
+.done_place_level5_items:
+    ret
 
-.next_building:
-    inc esi
-    jmp .draw_buildings
+enter_level4:
+    lea r11, [map_data_4]
+    mov qword [current_map], r11
 
-.done:
-    pop r14
-    pop r13
-    pop r12
+    mov qword [level4_items_collected], 0
+
+    mov byte [r11 + 107], '!'
+    mov byte [r11 + 554], '!'
+    mov byte [r11 + 1003], '!'
+
+    mov qword [player_x], 2
+    mov qword [player_y], 2
+    mov qword [player_z], 0
+    mov qword [jump_timer], 0
+    ret
+
+enter_level5:
+    call reset_level5_state
+
+    lea r11, [map_data_5]
+    mov qword [current_map], r11
+
+    mov qword [player_x], 6
+    mov qword [player_y], 3
+    mov qword [player_z], 0
+    mov qword [jump_timer], 0
     ret
 
 menu_loop:
@@ -443,8 +365,6 @@ game_loop:
     cmp rax, rbx
     jne .check_bounds
 
-    call update_level5_map
-
 .check_bounds:
     ; 3. COLISÕES E LIMITES
     cmp qword [player_x], 1
@@ -458,6 +378,10 @@ game_loop:
     mov rbx, [current_map]
     cmp rax, rbx
     je .check_level3_exit
+
+    lea rax, [map_data_5]
+    cmp rax, rbx
+    je .check_level5_exit
 
     lea rax, [map_data_4]
     cmp rax, rbx
@@ -476,13 +400,16 @@ game_loop:
     jmp .check_y_bounds
 
 .check_level4_exit:
-    mov rax, [level4_items_collected]
-    cmp rax, [level4_items_total]
-    jl .block_level4_exit
-
     jmp .next_level
 
+.check_level5_exit:
+    jmp .win_game
+
 .block_level4_exit:
+    mov qword [player_x], 74
+    jmp .check_y_bounds
+
+.block_level5_exit:
     mov qword [player_x], 74
     jmp .check_y_bounds
     
@@ -520,6 +447,10 @@ game_loop:
     lea rdx, [map_data_3]
     cmp rbx, rdx
     je .check_item_level3
+
+    lea rdx, [map_data_5]
+    cmp rbx, rdx
+    je .check_item_level5
 
     lea rdx, [map_data_4]
     cmp rbx, rdx
@@ -600,6 +531,68 @@ game_loop:
     mov byte [rdx + rax], '#'
 
     inc qword [level4_items_collected]
+    jmp .render
+
+.check_item_level5:
+    cmp cl, '!'
+    jne .render
+
+    mov rax, [player_x]
+    cmp rax, [level5_item_x]
+    je .check_level5_item_1
+    cmp rax, [level5_item_x + 8]
+    je .check_level5_item_2
+    cmp rax, [level5_item_x + 16]
+    je .check_level5_item_3
+    cmp rax, [level5_item_x + 24]
+    je .check_level5_item_4
+    cmp rax, [level5_item_x + 32]
+    je .check_level5_item_5
+    jmp .render
+
+.check_level5_item_1:
+    mov rax, [player_y]
+    cmp rax, [level5_item_y]
+    jne .render
+    jmp .collect_level5_item
+
+.check_level5_item_2:
+    mov rax, [player_y]
+    cmp rax, [level5_item_y + 8]
+    jne .render
+    jmp .collect_level5_item
+
+.check_level5_item_3:
+    mov rax, [player_y]
+    cmp rax, [level5_item_y + 16]
+    jne .render
+    jmp .collect_level5_item
+
+.check_level5_item_4:
+    mov rax, [player_y]
+    cmp rax, [level5_item_y + 24]
+    jne .render
+    jmp .collect_level5_item
+
+.check_level5_item_5:
+    mov rax, [player_y]
+    cmp rax, [level5_item_y + 32]
+    jne .render
+
+.collect_level5_item:
+    mov rdx, [current_map]
+
+    mov rax, [player_y]
+    dec rax
+    mov rbx, map_width
+    imul rax, rbx
+
+    mov rcx, [player_x]
+    dec rcx
+    add rax, rcx
+    mov byte [rdx + rax], '#'
+
+    inc qword [level5_items_collected]
     jmp .render
 
 .game_over:
@@ -689,24 +682,14 @@ game_loop:
     cmp rax, rbx
     jne .check_level_4
 
-    cmp qword [force_next_level], 0
-    jne .load_level4
+    cmp r10, 0
+    jne .enter_level4_from_level3
 
     cmp qword [special_item_collected], 0
     je .block_level3_exit
 
-.load_level4:
-    lea r11, [map_data_4]
-    mov qword [current_map], r11
-
-    mov qword [level4_items_collected], 0
-
-    mov byte [r11 + 107], '!'
-    mov byte [r11 + 554], '!'
-    mov byte [r11 + 1003], '!'
-
-    mov qword [player_x], 2
-    mov qword [player_y], 2
+.enter_level4_from_level3:
+    call enter_level4
     jmp game_loop
 
 .check_level_4:
@@ -714,28 +697,56 @@ game_loop:
     cmp rax, rbx
     jne .win_game
 
-    cmp qword [force_next_level], 0
-    jne .load_level5
+    cmp r10, 0
+    jne .enter_level5_from_level4
 
-    mov rax, [level4_items_collected]
-    cmp rax, [level4_items_total]
-    jl .block_level4_exit
-
-.load_level5:
-    lea r11, [map_data_5]
-    mov qword [current_map], r11
-
-    call reset_level5_state
-    call update_level5_map
-
-    mov qword [player_x], 2
-    mov qword [player_y], 2
+.enter_level5_from_level4:
+    call enter_level5
     jmp game_loop
 
 .win_game:
+    call GetTickCount64
+    sub rax, [game_start_tick]
+
+    mov r11, rax
+
+    mov rax, r11
+    xor edx, edx
+    mov r10, 60000
+    div r10
+    mov r8, rax
+
+    mov rax, rdx
+    xor edx, edx
+    mov r10, 1000
+    div r10
+    mov r9, rdx
+    mov rdx, rax
+
     lea rcx, [msg_win]
     call printf
+
+.win_game_wait:
+    mov rcx, 0x51           ; 'Q'
+    call GetAsyncKeyState
+    test ax, 0x8000
+    jnz .win_quit_game
+
+    mov rcx, 0x52           ; 'R'
+    call GetAsyncKeyState
+    test ax, 0x8000
+    jnz .win_restart_game
+
+    mov rcx, 45
+    call Sleep
+    jmp .win_game_wait
+
+.win_quit_game:
     jmp .end_game
+
+.win_restart_game:
+    call reset_game
+    jmp game_loop
 
 .render:
     ; 4.1 LIMPAR A TELA
